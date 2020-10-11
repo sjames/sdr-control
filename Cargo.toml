@@ -1,0 +1,60 @@
+[package]
+name = "sdr-control"
+version = "0.1.0"
+authors = ["Sojan James <sojan.james@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.release]
+opt-level = 'z' # turn on maximum optimizations. We only have 64kB
+lto = true      # Link-time-optimizations for further size reduction
+debug = 2 # default is `false`; using `true` is also OK
+codegen-units = 1
+overflow-checks = true
+
+[dependencies]
+cortex-m = "^0.6.3"      # Access to the generic ARM peripherals
+cortex-m-rt = "^0.6.12"  # Startup code for the ARM Core
+embedded-hal = "^0.2.4"  # Access to generic embedded functions (`set_high`)
+#si5351 = {git = "https://github.com/sjames/si5351.git"}
+si5351 = {path  = "../si5351"}
+bitflags = "1.0"
+usb-device = "0.2.4"
+usbd-serial = "0.1.1"
+
+# Access to the stm32f103 HAL.
+[dependencies.stm32f1xx-hal]
+# Bluepill contains a 64kB flash variant which is called "medium density"
+features = ["stm32f103", "rt", "medium", "stm32-usbd"]
+version = "^0.6.1"
+
+[profile.dev]
+debug = 1 # default is `true`; not needed if not already overridden
+
+[dependencies.defmt]
+git = "https://github.com/knurling-rs/defmt"
+branch = "main"
+
+[dependencies.defmt-rtt]
+git = "https://github.com/knurling-rs/defmt"
+branch = "main"
+
+[dependencies.panic-probe]
+git = "https://github.com/knurling-rs/probe-run"
+branch = "main"
+
+[features]
+# set logging levels here
+default = [
+  "defmt-default",
+  # "dependency-a/defmt-trace",
+]
+
+# do NOT modify these features
+defmt-default = []
+defmt-trace = []
+defmt-debug = []
+defmt-info = []
+defmt-warn = []
+defmt-error = []
