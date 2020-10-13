@@ -23,4 +23,3 @@ pub fn exit() -> ! {
         cortex_m::asm::bkpt();
     }
 }
-

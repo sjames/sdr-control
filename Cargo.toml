@@ -23,6 +23,7 @@ bitflags = "1.0"
 usb-device = "0.2.4"
 usbd-serial = "0.1.1"
 
+
 # Access to the stm32f103 HAL.
 [dependencies.stm32f1xx-hal]
 # Bluepill contains a 64kB flash variant which is called "medium density"

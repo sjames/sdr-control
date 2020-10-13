@@ -4,8 +4,7 @@
 
 use sdr_control as _; // global logger + panicking-behavior + memory layout
 
-
-// SI5351 
+// SI5351
 // SCL connected to PB8
 // SDA connected to PB9
 
@@ -16,9 +15,7 @@ use stm32f1xx_hal::stm32::{interrupt, Interrupt};
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 use stm32f1xx_hal::{delay::Delay, pac, prelude::*}; // STM32F1 specific functions
 
-use stm32f1xx_hal::{
-    i2c::{BlockingI2c, DutyCycle, Mode},
-};
+use stm32f1xx_hal::i2c::{BlockingI2c, DutyCycle, Mode};
 use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
@@ -101,24 +98,35 @@ fn main() -> ! {
         1000,
     );
 
-    let mut clock = Si5351Device::new( i2c,false,25_000_000);
+    let mut clock = Si5351Device::new(i2c, false, 25_000_000);
 
     defmt::info!("Going to init 5351");
     if let Ok(_) = clock.init(si5351::CrystalLoad::_10) {
         defmt::debug!("init done");
+        /*
         if let Ok(_)= clock.set_frequency(si5351::PLL::A, si5351::ClockOutput::Clk0, 14_175_000) {
         } else {
             defmt::error!("set_frequency failed");
-            sdr_control::exit();    
+            sdr_control::exit();
         }
+        */
 
+        if let Ok(_) = clock.set_quadrature_clock_freq(
+            si5351::PLL::A,
+            (si5351::ClockOutput::Clk1, si5351::ClockOutput::Clk0),
+            48_550_000,
+        ) {
+           defmt::info!("VCO freq:{:?}",clock.get_vco_frequency()) ;
+        } else {
+            defmt::error!("set_frequency failed");
+            sdr_control::exit();
+        }
     } else {
         defmt::error!("5351 init failed");
-        sdr_control::exit();    
+        sdr_control::exit();
     }
-    
+
     defmt::error!("Blah");
-    
 
     // USB Initialization
 
@@ -130,7 +138,6 @@ fn main() -> ! {
     let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
     usb_dp.set_low();
     cortex_m::asm::delay(clocks.sysclk().0 / 100);
-
 
     let usb = Peripheral {
         usb: dp.USB,
@@ -197,8 +204,6 @@ fn main() -> ! {
         //led.set_low().ok();
     }
 
-
-
     /*
     loop {
         led.set_high().ok();
@@ -208,4 +213,3 @@ fn main() -> ! {
     }
     */
 }
-
