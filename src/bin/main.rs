@@ -8,19 +8,26 @@ use sdr_control as _; // global logger + panicking-behavior + memory layout
 // SCL connected to PB8
 // SDA connected to PB9
 
+// Rotary
+// P1 -> A8
+// P2 -> A9
+// TIM1 used as rotary encoder. Inputs are pulled-up
+
 use cortex_m::asm::{delay, wfi};
 use cortex_m_rt::entry; // The runtime
 use embedded_hal::digital::v2::OutputPin; // the `set_high/low`function
-use stm32f1xx_hal::stm32::{interrupt, Interrupt};
+use stm32f1xx_hal::i2c::{BlockingI2c, DutyCycle, Mode};
+use stm32f1xx_hal::stm32::{interrupt, tim1, Interrupt, TIM1};
+use stm32f1xx_hal::timer::Timer;
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 use stm32f1xx_hal::{delay::Delay, pac, prelude::*}; // STM32F1 specific functions
-
-use stm32f1xx_hal::i2c::{BlockingI2c, DutyCycle, Mode};
 use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use si5351;
 use si5351::{Si5351, Si5351Device};
+
+use sdr_control::vco::{self, Vco};
 
 // For use in interrupt handlers
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
@@ -69,7 +76,7 @@ fn main() -> ! {
     let clocks = rcc
         .cfgr
         .use_hse(8.mhz())
-        .sysclk(48.mhz())
+        .sysclk(72.mhz())
         .pclk1(24.mhz())
         .freeze(&mut flash.acr);
 
@@ -103,24 +110,25 @@ fn main() -> ! {
     defmt::info!("Going to init 5351");
     if let Ok(_) = clock.init(si5351::CrystalLoad::_10) {
         defmt::debug!("init done");
-        /*
-        if let Ok(_)= clock.set_frequency(si5351::PLL::A, si5351::ClockOutput::Clk0, 14_175_000) {
-        } else {
-            defmt::error!("set_frequency failed");
-            sdr_control::exit();
-        }
-        */
-
-        if let Ok(_) = clock.set_quadrature_clock_freq(
-            si5351::PLL::A,
-            (si5351::ClockOutput::Clk1, si5351::ClockOutput::Clk0),
-            48_550_000,
-        ) {
-           defmt::info!("VCO freq:{:?}",clock.get_vco_frequency()) ;
-        } else {
-            defmt::error!("set_frequency failed");
-            sdr_control::exit();
-        }
+    /*
+    if let Ok(_)= clock.set_frequency(si5351::PLL::A, si5351::ClockOutput::Clk0, 14_175_000) {
+    } else {
+        defmt::error!("set_frequency failed");
+        sdr_control::exit();
+    }
+    */
+    /*
+    if let Ok(_) = clock.set_quadrature_clock_freq(
+        si5351::PLL::A,
+        (si5351::ClockOutput::Clk0, si5351::ClockOutput::Clk1),
+        7_465_000,
+    ) {
+       defmt::info!("VCO freq:{:?}",clock.get_vco_frequency()) ;
+    } else {
+        defmt::error!("set_frequency failed");
+        sdr_control::exit();
+    }
+    */
     } else {
         defmt::error!("5351 init failed");
         sdr_control::exit();
@@ -162,13 +170,35 @@ fn main() -> ! {
     //nvic.enable(Interrupt::USB_HP_CAN_TX);
     //nvic.enable(Interrupt::USB_LP_CAN_RX0);
 
+    let tim1 = dp.TIM1;
+    let _tim1 = Timer::tim1(tim1, &clocks, &mut rcc.apb2);
+    let tim1 = setup_tim1_for_rotary();
+    // pull-up the timer1 inputs to connect the rotary.
+    let _tim1_ch1 = gpioa.pa8.into_pull_up_input(&mut gpioa.crh);
+    let _tim1_ch2 = gpioa.pa9.into_pull_up_input(&mut gpioa.crh);
+
+
+    let mut vco = Vco::create(14_000_000);
+    vco.set_multiplier(vco::Multiplier::Hundred);
+
     loop {
-        defmt::debug!("loop");
-        led.set_high().ok();
-        delay.delay_ms(1_00_u16);
-        //wfi();
-        led.set_low().ok();
-        delay.delay_ms(1_000_u16);
+        vco.run_once(
+            || tim1.cnt.read().bits() as u16,
+            |freq| {
+                led.set_low().ok();
+                if let Ok(_) = clock.set_quadrature_clock_freq(
+                    si5351::PLL::A,
+                    (si5351::ClockOutput::Clk0, si5351::ClockOutput::Clk1),
+                    freq,
+                ) {
+                    defmt::info!("VCO freq:{:?} freq:{:?}", clock.get_vco_frequency(), freq);
+                } else {
+                    defmt::error!("set_frequency failed");
+                    sdr_control::exit();
+                }
+                led.set_high().ok();
+            },
+        );
     }
 
     #[interrupt]
@@ -201,15 +231,30 @@ fn main() -> ! {
             }
             _ => {}
         }
-        //led.set_low().ok();
     }
+}
 
-    /*
-    loop {
-        led.set_high().ok();
-        delay.delay_ms(1_00_u16);
-        led.set_low().ok();
-        delay.delay_ms(1_000_u16);
-    }
-    */
+fn setup_tim1_for_rotary() -> &'static tim1::RegisterBlock {
+    let tim1 = unsafe { &*TIM1::ptr() };
+
+    tim1.smcr.write(|s| s.sms().encoder_mode_1());
+    tim1.arr.write(|a| a.arr().bits(65535));
+    tim1.ccer.write(|c| {
+        c.cc1p().clear_bit(); // rising edge
+        c.cc2p().clear_bit(); // rising edge
+        c.cc1np().clear_bit();
+        c.cc2np().clear_bit()
+    });
+    tim1.ccmr1_input_mut().write(|c| {
+        c.ic2f().bits(0);
+        c.cc1s().ti2();
+        c.cc2s().ti1();
+        c.ic1f().bits(0)
+    });
+
+    tim1.ccmr2_input_mut().write(|c| c.cc4s().ti4());
+
+    tim1.cr1.write(|c| c.cen().set_bit());
+    tim1.cnt.write(|w| unsafe { w.bits(65535 / 2) });
+    tim1
 }
