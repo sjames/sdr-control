@@ -31,11 +31,13 @@ use si5351;
 use si5351::{Si5351, Si5351Device};
 
 use sdr_control::vco::{self, Vco};
+use sdr_control::usb_audio::UsbAudioClass;
 
 // For use in interrupt handlers
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
 static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
+static mut USB_AUDIO: Option<UsbAudioClass<UsbBusType>> = None;
 
 
 // This marks the entrypoint of our application. The cortex_m_rt creates some
@@ -137,13 +139,14 @@ fn main() -> ! {
     };
     unsafe {
         USB_BUS = Some(UsbBus::new(usb));
-        USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
-
-        let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x16c0, 0x27dd))
+        //USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
+        USB_AUDIO = Some(UsbAudioClass::new(USB_BUS.as_ref().unwrap(), 128));
+        //v17A0p0001
+        let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x17A0, 0x0001))
             .manufacturer("Sojan")
             .product("SDR Controller")
             .serial_number("TEST")
-            .device_class(USB_CLASS_CDC)
+            //.device_class(0)
             .build();
 
         USB_DEVICE = Some(usb_dev);
@@ -197,27 +200,27 @@ fn main() -> ! {
 
     fn usb_interrupt() {
         let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
-        let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+        //let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+        let audio = unsafe { USB_AUDIO.as_mut().unwrap() };
         
 
-        if !usb_dev.poll(&mut [serial]) {
+        if !usb_dev.poll(&mut [audio]) {
             return;
         }
-        //led.set_high().ok();
-        let mut buf = [0u8; 8];
-        match serial.read(&mut buf) {
-            Ok(count) if count > 0 => {
-                for c in buf[0..count].iter_mut() {
-                    if 0x61 <= *c && *c <= 0x7a {
-                        *c &= !0x20;
-                    }
-                }
-                serial.write(&buf[0..count]).ok();
-            }
-            _ => {}
+
+        let mut buf = [0u8;128];
+
+        for c in buf[..].iter_mut() {
+            *c = 0x55;
         }
 
+        let err = audio.write_packet(&buf[..]);
 
+        if err.is_err() {
+            defmt::error!("write_packet failed");
+        }
+
+        
     }
 }
 

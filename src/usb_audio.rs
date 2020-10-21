@@ -2,6 +2,7 @@ use core::convert::TryInto;
 use core::mem;
 use usb_device::class_prelude::*;
 use usb_device::Result;
+use usb_device::endpoint::{EndpointSyncType};
 
 /// This should be used as `device_class` when building the `UsbDevice`.
 pub const USB_INTERFACE_CLASS_AUDIO: u8 = 0x01;
@@ -85,7 +86,7 @@ impl<B: UsbBus> UsbAudioClass<'_, B> {
             audio_control_if : alloc.interface(),
             audio_stream : alloc.interface(),
             alt_audio_stream : alloc.interface(),
-            audio_in_ep : alloc.bulk(max_packet_size),
+            audio_in_ep : alloc.isochronous(max_packet_size, EndpointSyncType::Asynchronous,4),
         }
     }
 
@@ -96,6 +97,7 @@ impl<B: UsbBus> UsbAudioClass<'_, B> {
 
     /// Writes a single packet into the IN endpoint.
     pub fn write_packet(&mut self, data: &[u8]) -> Result<usize> {
+        defmt::info!("write_packet");
         self.audio_in_ep.write(data)
     }
 
@@ -228,6 +230,7 @@ impl<B: UsbBus> UsbClass<B> for UsbAudioClass<'_, B> {
 
     fn control_in(&mut self, xfer: ControlIn<B>) {
         let req = xfer.request();
+        
 
         if !(req.request_type == control::RequestType::Class
             && req.recipient == control::Recipient::Interface
@@ -236,6 +239,7 @@ impl<B: UsbBus> UsbClass<B> for UsbAudioClass<'_, B> {
             return;
         }
 
+        defmt::info!("control_in - req : {:?}",req.request);
         match req.request {
             /*
             REQ_GET_LINE_CODING if req.length == 7 => {
