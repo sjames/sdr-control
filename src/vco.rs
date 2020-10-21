@@ -1,3 +1,10 @@
+// VCO controller.
+// A simple struct with some state to manage the VCO frequency.
+// Hardware interface via closures
+
+// Sojan James October 2020
+
+
 pub enum Multiplier {
     Unit,
     Ten,

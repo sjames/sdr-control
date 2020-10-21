@@ -2,6 +2,7 @@
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 pub mod vco;
+pub mod usb_audio;
 
 use defmt_rtt as _; // global logger
 use panic_probe as _;

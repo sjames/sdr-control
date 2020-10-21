@@ -1,3 +1,6 @@
+// SDR Controller
+// Sojan James October 2020
+// 
 // std and main are not available for bare metal software
 #![no_std]
 #![no_main]
@@ -33,6 +36,7 @@ use sdr_control::vco::{self, Vco};
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
 static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
+
 
 // This marks the entrypoint of our application. The cortex_m_rt creates some
 // startup code before this, but we don't need to worry about this
@@ -110,34 +114,13 @@ fn main() -> ! {
     defmt::info!("Going to init 5351");
     if let Ok(_) = clock.init(si5351::CrystalLoad::_10) {
         defmt::debug!("init done");
-    /*
-    if let Ok(_)= clock.set_frequency(si5351::PLL::A, si5351::ClockOutput::Clk0, 14_175_000) {
-    } else {
-        defmt::error!("set_frequency failed");
-        sdr_control::exit();
-    }
-    */
-    /*
-    if let Ok(_) = clock.set_quadrature_clock_freq(
-        si5351::PLL::A,
-        (si5351::ClockOutput::Clk0, si5351::ClockOutput::Clk1),
-        7_465_000,
-    ) {
-       defmt::info!("VCO freq:{:?}",clock.get_vco_frequency()) ;
-    } else {
-        defmt::error!("set_frequency failed");
-        sdr_control::exit();
-    }
-    */
+
     } else {
         defmt::error!("5351 init failed");
         sdr_control::exit();
     }
 
-    defmt::error!("Blah");
-
     // USB Initialization
-
     let mut gpioa = dp.GPIOA.split(&mut rcc.apb2);
     // BluePill board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
@@ -164,11 +147,12 @@ fn main() -> ! {
             .build();
 
         USB_DEVICE = Some(usb_dev);
+
     }
 
-    //let mut nvic = cp.NVIC;
-    //nvic.enable(Interrupt::USB_HP_CAN_TX);
-    //nvic.enable(Interrupt::USB_LP_CAN_RX0);
+    let mut nvic = cp.NVIC;
+    nvic.enable(Interrupt::USB_HP_CAN_TX);
+    nvic.enable(Interrupt::USB_LP_CAN_RX0);
 
     let tim1 = dp.TIM1;
     let _tim1 = Timer::tim1(tim1, &clocks, &mut rcc.apb2);
@@ -214,6 +198,7 @@ fn main() -> ! {
     fn usb_interrupt() {
         let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
         let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
+        
 
         if !usb_dev.poll(&mut [serial]) {
             return;
@@ -231,6 +216,8 @@ fn main() -> ! {
             }
             _ => {}
         }
+
+
     }
 }
 
