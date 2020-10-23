@@ -16,16 +16,21 @@ use sdr_control as _; // global logger + panicking-behavior + memory layout
 // P2 -> A9
 // TIM1 used as rotary encoder. Inputs are pulled-up
 
+use core::cell::RefCell;
 use cortex_m::asm::{delay, wfi};
 use cortex_m_rt::entry; // The runtime
+use cortex_m::interrupt::Mutex;
 use embedded_hal::digital::v2::OutputPin; // the `set_high/low`function
 use stm32f1xx_hal::i2c::{BlockingI2c, DutyCycle, Mode};
-use stm32f1xx_hal::stm32::{interrupt, tim1, Interrupt, TIM1};
+use stm32f1xx_hal::stm32::{interrupt, tim1, Interrupt, TIM1, TIM2, ADC1, ADC2, DMA1};
 use stm32f1xx_hal::timer::Timer;
+use stm32f1xx_hal::dma::dma2;
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 use stm32f1xx_hal::{delay::Delay, pac, prelude::*}; // STM32F1 specific functions
 use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
+
+use lazy_static::lazy_static;
 
 use si5351;
 use si5351::{Si5351, Si5351Device};
@@ -39,10 +44,17 @@ static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
 static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
 static mut USB_AUDIO: Option<UsbAudioClass<UsbBusType>> = None;
 
+// DMA Buffer
+const DMA_LENGTH:usize = 64;
+static mut DMA_BUFFER: [u32; DMA_LENGTH] = [0; DMA_LENGTH];
+
+lazy_static! {
+    static ref MUTEX_DMA2:  Mutex<RefCell<Option<stm32f1xx_hal::dma::dma2::C3>>>  = Mutex::new(RefCell::new(None));
+}
 
 // This marks the entrypoint of our application. The cortex_m_rt creates some
 // startup code before this, but we don't need to worry about this
-#[entry]
+#[cortex_m_rt::entry]
 fn main() -> ! {
     // Get handles to the hardware objects. These functions can only be called
     // once, so that the borrowchecker can ensure you don't reconfigure
@@ -259,4 +271,37 @@ fn setup_tim1_for_rotary() -> &'static tim1::RegisterBlock {
     tim1.cr1.write(|c| c.cen().set_bit());
     tim1.cnt.write(|w| unsafe { w.bits(65535 / 2) });
     tim1
+}
+
+// DMA will be triggered by TIM2
+fn initialize_tim2_for_dma(rcc:&mut stm32f1xx_hal::rcc::Rcc, sysclk:u32, fs: u32) {
+    rcc.apb1.set_pwren();
+    let arr = sysclk / fs;
+    let tim2 = unsafe { &*TIM2::ptr() };
+    tim2.cr2.write(|w| w.mms().update());
+    tim2.arr.write(|w| w.arr().bits(arr as u16));
+    tim2.cr1.modify(|_,w| w.cen().enabled());
+
+    let adc = unsafe { &*ADC1::ptr() };
+    adc.cr1.write(|w|w.dualmod().regular()); // regular simultaneous mode
+
+    adc.cr2.write(|w|{
+        w.exttrig().set_bit();
+        w.extsel().tim2cc2();
+        w.dma().enabled();
+        w.adon().enabled()
+    });
+
+    let adc2 = unsafe { &*ADC2::ptr() };
+    adc2.cr2.write(|w|{
+        w.adon().enabled()
+    });
+
+    // dma config
+    //rcc.ahb.enr().modify(|_,w|w.dma1en().set_bit());
+    let ma = unsafe {
+        DMA_BUFFER.as_ptr()
+    } as usize as u32;  
+    let ndt = (DMA_LENGTH / 4) as u16; // number of items to transfer 4 bytes per transfer
+    let dma1 = unsafe { &*DMA1::ptr() };
 }
