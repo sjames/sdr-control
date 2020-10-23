@@ -140,7 +140,7 @@ fn main() -> ! {
     unsafe {
         USB_BUS = Some(UsbBus::new(usb));
         //USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
-        USB_AUDIO = Some(UsbAudioClass::new(USB_BUS.as_ref().unwrap(), 128));
+        USB_AUDIO = Some(UsbAudioClass::new(USB_BUS.as_ref().unwrap(), 64));
         //v17A0p0001
         let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x17A0, 0x0001))
             .manufacturer("Sojan")
@@ -198,6 +198,8 @@ fn main() -> ! {
         usb_interrupt();
     }
 
+    static mut dummy_data : u8 = 0x55;
+
     fn usb_interrupt() {
         let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
         //let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
@@ -208,16 +210,26 @@ fn main() -> ! {
             return;
         }
 
-        let mut buf = [0u8;128];
+        let mut buf = [0u8;64];
+
+        let mut dummy= unsafe {dummy_data};
 
         for c in buf[..].iter_mut() {
-            *c = 0x55;
+            *c = dummy;
         }
+
+       
 
         let err = audio.write_packet(&buf[..]);
 
         if err.is_err() {
             defmt::error!("write_packet failed");
+        } else {
+            //defmt::info!("write_packet success");
+            unsafe {
+                if dummy_data == 0xFF { dummy_data = 0}
+                dummy_data += 1;
+            }
         }
 
         

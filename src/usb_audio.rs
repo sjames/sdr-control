@@ -97,7 +97,7 @@ impl<B: UsbBus> UsbAudioClass<'_, B> {
 
     /// Writes a single packet into the IN endpoint.
     pub fn write_packet(&mut self, data: &[u8]) -> Result<usize> {
-        defmt::info!("write_packet");
+        //defmt::info!("write_packet");
         self.audio_in_ep.write(data)
     }
 
@@ -127,8 +127,8 @@ impl<B: UsbBus> UsbClass<B> for UsbAudioClass<'_, B> {
             CS_INTERFACE,
             &[
                 AUDIO_SUB_TYPE_HEADER, // bDescriptorSubtype
-                0x00, 0x01, // bcdADC (1.0),
-                0x00, 43, // wTotalLength (Compute this!)
+                0x00, 0x1, // bcdADC (1.0),
+                43, 0, // wTotalLength (Compute this!)
                 0x01, // bInCollection (1 streaming interface)
                 0x01, // baInterfaceNr (Interface 1 is stream)
             ])?;
@@ -138,10 +138,10 @@ impl<B: UsbBus> UsbClass<B> for UsbAudioClass<'_, B> {
             &[
                 AUDIO_SUB_TYPE_INPUT_TERMINAL, // bDescriptorSubtype
                 0x01, // bTerminalID 1,
-                0x07, 0x10, // wTerminalType (radio receiver)
+                0x10, 0x07, // wTerminalType (radio receiver)
                 0x00, // bAssocTerminal (none)
                 0x02, // bNrChannels - 2 for I and Q
-                0x00, 0x03, // wChannelConfig (left, right)
+                0x03, 0x00, // wChannelConfig (left, right)
                 0x00, // iChannelNames (none)
                 0x00, // iTerminal (none)
             ])?;
@@ -153,7 +153,7 @@ impl<B: UsbBus> UsbClass<B> for UsbAudioClass<'_, B> {
                 0x02, // bUnitID,
                 0x01, // bSourceID (input terminal 1)
                 0x02, // bControlSize (2 bytes)
-                0x00, 0x01, // Master controls
+                0x01, 0x00, // Master controls
                 0x00, 0x00, // Channel 0 controls
                 0x00, 0x00, // Channel 1 controls
                 0x00, // iFeature (none)
@@ -177,11 +177,11 @@ impl<B: UsbBus> UsbClass<B> for UsbAudioClass<'_, B> {
             USB_AUDIO_PROTOCOL_NONE)?;
         
         //alternate audio stream
-        writer.interface(
-            self.alt_audio_stream,
+        writer.interface_with_alternate_setting(
+            self.audio_stream,
             USB_INTERFACE_CLASS_AUDIO,
             USB_AUDIO_SUBCLASS_AUDIOSTREAMING,
-            USB_AUDIO_PROTOCOL_NONE)?;
+            USB_AUDIO_PROTOCOL_NONE, 1)?;
 
         // Audio Stream Audio Class Descriptor
         writer.write(
@@ -190,7 +190,7 @@ impl<B: UsbBus> UsbClass<B> for UsbAudioClass<'_, B> {
                 AUDIO_SUB_TYPE_AS_GENERAL, // bDescriptorSubtype
                 0x03, // bTerminalID,
                 0x00, // bDelay
-                0x00, 0x01, // wFormatTag (PCM Format)
+                0x01, 0x00, // wFormatTag (PCM Format)
             ])?;
         
         // Format Type Audio Descriptor
