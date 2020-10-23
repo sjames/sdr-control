@@ -4,7 +4,6 @@
 
 // Sojan James October 2020
 
-
 pub enum Multiplier {
     Unit,
     Ten,

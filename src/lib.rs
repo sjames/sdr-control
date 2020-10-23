@@ -1,8 +1,8 @@
 #![no_std]
 
 use core::sync::atomic::{AtomicUsize, Ordering};
-pub mod vco;
 pub mod usb_audio;
+pub mod vco;
 
 use defmt_rtt as _; // global logger
 use panic_probe as _;
