@@ -18,19 +18,19 @@ use sdr_control as _; // global logger + panicking-behavior + memory layout
 
 use core::cell::RefCell;
 use cortex_m;
-use cortex_m::asm::{delay, wfi};
+
 use cortex_m::interrupt::Mutex;
-use cortex_m_rt::entry; // The runtime
+ // The runtime
 use embedded_hal::digital::v2::OutputPin; // the `set_high/low`function
-use stm32f1xx_hal::dma::{self, dma2};
+use stm32f1xx_hal::dma::{self};
 use stm32f1xx_hal::i2c::{BlockingI2c, DutyCycle, Mode};
 use stm32f1xx_hal::stm32::{self, interrupt, tim1, Interrupt, ADC1, ADC2, DMA1, TIM1, TIM2, TIM3};
-use stm32f1xx_hal::time::Hertz;
+
 use stm32f1xx_hal::timer::Timer;
 use stm32f1xx_hal::usb::{Peripheral, UsbBus, UsbBusType};
 use stm32f1xx_hal::{delay::Delay, pac, prelude::*}; // STM32F1 specific functions
 use usb_device::{bus::UsbBusAllocator, prelude::*};
-use usbd_serial::{SerialPort, USB_CLASS_CDC};
+
 
 use lazy_static::lazy_static;
 
@@ -42,7 +42,6 @@ use sdr_control::vco::{self, Vco};
 
 // For use in interrupt handlers
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
-static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
 static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
 static mut USB_AUDIO: Option<UsbAudioClass<UsbBusType>> = None;
 
@@ -109,9 +108,9 @@ fn main() -> ! {
     // wait. The function also consumes the System Timer peripheral, so that no
     // other function can access it. Otherwise the timer could be reset during a
     // delay.
-    let mut delay = Delay::new(cp.SYST, clocks);
+    let _delay = Delay::new(cp.SYST, clocks);
 
-    let mut i2c = BlockingI2c::i2c1(
+    let i2c = BlockingI2c::i2c1(
         dp.I2C1,
         (scl, sda),
         &mut afio.mapr,
@@ -145,10 +144,10 @@ fn main() -> ! {
     // will not reset your device when you upload new firmware.
     let mut usb_dp = gpioa.pa12.into_push_pull_output(&mut gpioa.crh);
 
-    let mut gpio_i = gpioa.pa0.into_analog(&mut gpioa.crl);
-    let mut gpio_q = gpioa.pa1.into_analog(&mut gpioa.crl);
+    let _gpio_i = gpioa.pa0.into_analog(&mut gpioa.crl);
+    let _gpio_q = gpioa.pa1.into_analog(&mut gpioa.crl);
 
-    usb_dp.set_low();
+    let _ = usb_dp.set_low();
     cortex_m::asm::delay(clocks.sysclk().0 / 100);
 
     let usb = Peripheral {
@@ -163,7 +162,6 @@ fn main() -> ! {
             .manufacturer("TEST")
             .product("SDR Controller")
             .serial_number("TEST")
-            //.device_class(0)
             .build();
 
         USB_DEVICE = Some(usb_dev);
@@ -219,8 +217,8 @@ fn main() -> ! {
     });
 
     // setup ADC
-    let mut adc1 = stm32f1xx_hal::adc::Adc::adc1(dp.ADC1, &mut rcc.apb2, clocks);
-    let mut adc2 = stm32f1xx_hal::adc::Adc::adc2(dp.ADC2, &mut rcc.apb2, clocks);
+    let _adc1 = stm32f1xx_hal::adc::Adc::adc1(dp.ADC1, &mut rcc.apb2, clocks);
+    let _adc2 = stm32f1xx_hal::adc::Adc::adc2(dp.ADC2, &mut rcc.apb2, clocks);
 
     let adc = unsafe { &*ADC1::ptr() };
     adc.cr1.write(|w| w.dualmod().regular()); // regular simultaneous mode
@@ -233,7 +231,7 @@ fn main() -> ! {
     });
 
     // Timer 2 used for clocking the ADC. 8KHz sampling rate for now
-    let tim3 = Timer::tim3(dp.TIM3, &clocks, &mut rcc.apb1);
+    let _tim3 = Timer::tim3(dp.TIM3, &clocks, &mut rcc.apb1);
     let arr: i32 = 72_000_000 / 8000;
     let tim3_regs = unsafe { &*TIM3::ptr() };
     tim3_regs.cr2.write(|w| w.mms().update());
@@ -327,7 +325,7 @@ fn main() -> ! {
         //defmt::info!("Dma Half transfer");
         } else if isr.tcif1().is_complete() {
             unsafe {
-                let err = audio.write_packet(&DMA_BUFFER[DMA_LENGTH / 2..]);
+                let _err = audio.write_packet(&DMA_BUFFER[DMA_LENGTH / 2..]);
             }
         //defmt::info!("Dma Complete");
         } else if isr.teif1().is_error() {
