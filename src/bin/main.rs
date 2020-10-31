@@ -158,11 +158,9 @@ fn main() -> ! {
     };
     unsafe {
         USB_BUS = Some(UsbBus::new(usb));
-        //USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
         USB_AUDIO = Some(UsbAudioClass::new(USB_BUS.as_ref().unwrap(), 64));
-        //v17A0p0001
         let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x17A0, 0x0001))
-            .manufacturer("Sojan")
+            .manufacturer("TEST")
             .product("SDR Controller")
             .serial_number("TEST")
             //.device_class(0)
@@ -178,16 +176,6 @@ fn main() -> ! {
     let tim1 = dp.TIM1;
     let _tim1 = Timer::tim1(tim1, &clocks, &mut rcc.apb2);
     let tim1 = setup_tim1_for_rotary();
-
-    
-    /*
-    rcc.apb1.set_pwren();
-    let arr = sysclk / fs;
-    let tim2 = unsafe { &*TIM2::ptr() };
-    tim2.cr2.write(|w| w.mms().update());
-    tim2.arr.write(|w| w.arr().bits(arr as u16));
-    tim2.cr1.modify(|_, w| w.cen().enabled());
-    */
 
     // pull-up the timer1 inputs to connect the rotary.
     let _tim1_ch1 = gpioa.pa8.into_pull_up_input(&mut gpioa.crh);
@@ -208,7 +196,7 @@ fn main() -> ! {
 
     let ma = unsafe { DMA_BUFFER.as_ptr() } as usize as u32;
 
-    let ndt = (DMA_LENGTH / 4 ) as u16; // number of items to transfer 4 bytes per transfer
+    let ndt = (DMA_LENGTH / 4) as u16; // number of items to transfer. 4 bytes per transfer
     let pa = unsafe { &(*ADC1::ptr()).dr as *const _ as u32 };
     dma_ch1.set_memory_address(ma, true);
     dma_ch1.set_peripheral_address(pa, false);
@@ -244,18 +232,13 @@ fn main() -> ! {
         w.adon().enabled()
     });
 
-    // Timer 2 used for clocking the ADC
+    // Timer 2 used for clocking the ADC. 8KHz sampling rate for now
     let tim3 = Timer::tim3(dp.TIM3, &clocks, &mut rcc.apb1);
     let arr: i32 = 72_000_000 / 8000;
     let tim3_regs = unsafe { &*TIM3::ptr() };
     tim3_regs.cr2.write(|w| w.mms().update());
     tim3_regs.arr.write(|w| w.arr().bits(arr as u16));
     tim3_regs.cr1.modify(|_, w| w.cen().enabled());
-
-
-    /*
-    let adc_dma = adc1.with_dma(gpio_i, dma_ch1);
-    */
 
     unsafe {
         nvic.set_priority(stm32::Interrupt::DMA1_CHANNEL1, 1);
@@ -292,10 +275,9 @@ fn main() -> ! {
                 led.set_high().ok();
                 let t = tim3_regs.cnt.read().cnt().bits();
                 let a = adc.sr.read().eoc().is_complete();
-                let dma = unsafe { DMA_BUFFER[0]};
+                let dma = unsafe { DMA_BUFFER[0] };
 
-                defmt::info!("Timer:{:?}  EOC:{:?}  dma:{:?}",t,a,dma);
-
+                defmt::info!("Timer:{:?}  EOC:{:?}  dma:{:?}", t, a, dma);
             },
         );
     }
@@ -312,13 +294,11 @@ fn main() -> ! {
 
     fn usb_interrupt() {
         let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
-        //let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
         let audio = unsafe { USB_AUDIO.as_mut().unwrap() };
 
         if !usb_dev.poll(&mut [audio]) {
             return;
         }
-
     }
 
     #[interrupt]
@@ -334,21 +314,22 @@ fn main() -> ! {
             // clear interrupt flags
             dma1.ifcr()
                 .write(|w| w.ctcif1().clear().chtif1().clear().cteif1().clear());
-     
+
             isr
         });
         let audio = unsafe { USB_AUDIO.as_mut().unwrap() };
         if isr.htif1().is_half() {
             unsafe {
-                let err = audio.write_packet(&DMA_BUFFER[0..DMA_LENGTH/2]);
+                // the USB code is safe to call from interrupt handlers.
+                // ISO packets have no handshake.
+                let _err = audio.write_packet(&DMA_BUFFER[0..DMA_LENGTH / 2]);
             }
-            //defmt::info!("Dma Half transfer");
+        //defmt::info!("Dma Half transfer");
         } else if isr.tcif1().is_complete() {
             unsafe {
-                let err = audio.write_packet(&DMA_BUFFER[DMA_LENGTH/2..]);
-                
+                let err = audio.write_packet(&DMA_BUFFER[DMA_LENGTH / 2..]);
             }
-            //defmt::info!("Dma Complete");
+        //defmt::info!("Dma Complete");
         } else if isr.teif1().is_error() {
             //defmt::error!("Dma transfer error");
         } else {
@@ -356,6 +337,7 @@ fn main() -> ! {
         }
     }
 
+    // Configure the tim1 for using the rotary. Remember to pull up the GPIO
     fn setup_tim1_for_rotary() -> &'static tim1::RegisterBlock {
         let tim1 = unsafe { &*TIM1::ptr() };
 

@@ -44,35 +44,11 @@ const AUDIO_SUB_TYPE_OUTPUT_TERMINAL: u8 = 0x03;
 const AUDIO_SUB_TYPE_AS_GENERAL: u8 = 0x01;
 const AUDIO_SUB_TYPE_FORMAT_TYPE: u8 = 0x02;
 
-/// Packet level implementation of a CDC-ACM serial port.
-///
-/// This class can be used directly and it has the least overhead due to directly reading and
-/// writing USB packets with no intermediate buffers, but it will not act like a stream-like serial
-/// port. The following constraints must be followed if you use this class directly:
-///
-/// - `read_packet` must be called with a buffer large enough to hold max_packet_size bytes, and the
-///   method will return a `WouldBlock` error if there is no packet to be read.
-/// - `write_packet` must not be called with a buffer larger than max_packet_size bytes, and the
-///   method will return a `WouldBlock` error if the previous packet has not been sent yet.
-/// - If you write a packet that is exactly max_packet_size bytes long, it won't be processed by the
-///   host operating system until a subsequent shorter packet is sent. A zero-length packet (ZLP)
-///   can be sent if there is no other data to send. This is because USB bulk transactions must be
-///   terminated with a short packet, even if the bulk endpoint is used for stream-like data.
 pub struct UsbAudioClass<'a, B: UsbBus> {
     audio_control_if: InterfaceNumber,
     audio_stream: InterfaceNumber,
     alt_audio_stream: InterfaceNumber,
     audio_in_ep: EndpointIn<'a, B>,
-    /*
-    comm_if: InterfaceNumber,
-    comm_ep: EndpointIn<'a, B>,
-    data_if: InterfaceNumber,
-    read_ep: EndpointOut<'a, B>,
-    write_ep: EndpointIn<'a, B>,
-    line_coding: LineCoding,
-    dtr: bool,
-    rts: bool,
-    */
 }
 
 impl<B: UsbBus> UsbAudioClass<'_, B> {
