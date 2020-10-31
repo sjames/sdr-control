@@ -18,12 +18,9 @@ cortex-m = "^0.6.3"      # Access to the generic ARM peripherals
 cortex-m-rt = "^0.6.12"  # Startup code for the ARM Core
 embedded-hal = "^0.2.4"  # Access to generic embedded functions (`set_high`)
 si5351 = {git = "https://github.com/sjames/si5351.git"}
-#si5351 = {path  = "../si5351"}
 bitflags = "1.0"
 #usb-device = "0.2.4"
-#usb-device = {git = "https://github.com/sjames/usb-device.git"}
-usb-device = {path = "../usb-device"}
-usbd-serial = {path = "../usbd-serial"}
+usb-device = {git = "https://github.com/sjames/usb-device.git"}
 
 [dependencies.lazy_static]
 features = ["spin_no_std"]
@@ -34,7 +31,8 @@ version = "1.4.0"
 # Bluepill contains a 64kB flash variant which is called "medium density"
 features = ["stm32f103", "rt", "medium", "stm32-usbd"]
 #version = "^0.6.1"
-path = "../stm32f1xx-hal"
+#path = "../stm32f1xx-hal"
+git = "https://github.com/sjames/stm32f1xx-hal.git"
 
 
 [profile.dev]
