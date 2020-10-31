@@ -273,9 +273,10 @@ fn main() -> ! {
                 led.set_high().ok();
                 let t = tim3_regs.cnt.read().cnt().bits();
                 let a = adc.sr.read().eoc().is_complete();
-                let dma = unsafe { DMA_BUFFER[0] };
+                let dma0 = unsafe { DMA_BUFFER[0] };
+                let dma1 = unsafe { DMA_BUFFER[1] };
 
-                defmt::info!("Timer:{:?}  EOC:{:?}  dma:{:?}", t, a, dma);
+                defmt::info!("Timer:{:?}  EOC:{:?}  dma:{:?}{:?}", t, a, dma0,dma1);
             },
         );
     }
